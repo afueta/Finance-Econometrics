@@ -3,8 +3,7 @@ title: "Finance Econometrics"
 author: "André Pellizzaro"
 date: "`r Sys.Date()`"
 output:
-  html_document:
-    df_print: paged
+  html_document:  rmdformats::robobook
 ---
 # Course Outline
 The objective of the course is to present linear and non-linear models for both conditional mean and conditional variances. The Extreme Values Theory, Theory of Copulas and Additional Topics (Models for High Frequency Data, Continuous Time Modelsor High Dimensional Model) will also be presented.
@@ -57,7 +56,7 @@ pl2 <- ts |> group_by(symbol) |>
 ggplotly(pl2)
 ```
 
-As duas metodólogias de retorno são usadas para estacionarizar a série, podemos perceber que 
+As duas metodólogias de retorno são usadas para estacionarizar a série, podemos perceber que ambas produzem 
 
 
 
