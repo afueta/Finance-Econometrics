@@ -23,7 +23,7 @@ df <- tq_get(c("^BVSP","BBAS3.SA"), get = "stock.prices", from = "2016-01-01", c
 Faremos então o **Retorno Simples** e **Retorno Composto** e para o fechamento do dia (Close):
 
 
-```{r fig.height=5, fig.width=10, message=FALSE, warning=FALSE}
+```{r fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
 
 ts <- df |> 
   group_by(symbol) |> 
