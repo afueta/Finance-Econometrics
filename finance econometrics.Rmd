@@ -7,37 +7,54 @@ output: html_notebook
 # Course Outline
 The objective of the course is to present linear and non-linear models for both conditional mean and conditional variances. The Extreme Values Theory, Theory of Copulas and Additional Topics (Models for High Frequency Data, Continuous Time Modelsor High Dimensional Model) will also be presented.
 
-## Stylized Facts in Financial Data
+# Stylized Facts in Financial Data
 
 Primeiro, iremos buscar as bases de dados, sendo `c("^IXIC","AAPL")` o índice NASDAQ e a ação da Apple, respectivamente:
 
 ```{r message=FALSE, warning=FALSE}
-rm(list=ls())
+options(scipen=999)
 library(tidyquant)
 library(tidyverse)
-df <- tq_get(c("^IXIC","AAPL"), get = "stock.prices", from = "2016-01-01", complete_cases = FALSE)
+library(plotly)
+df <- tq_get(c("^BVSP","BBAS3.SA"), get = "stock.prices", from = "2016-01-01", complete_cases = FALSE)
 ```
 
-Faremos então o **retorno composto** e para o fechamento do dia (Close):
+Faremos então o **Retorno Simples** e **Retorno Composto** e para o fechamento do dia (Close):
 
-```{r message=FALSE, warning=FALSE}
+
+```{r fig.height=5, fig.width=10, message=FALSE, warning=FALSE}
+
 ts <- df |> 
   group_by(symbol) |> 
   summarise(date = date, 
             close = close , 
             lClose = log(close), 
-            rsClose = ((close-lag(close))/lag(close))*100,
-            rcClose = (lClose - lag(lClose))*100
+            rsClose = ((close-Lag(close))/Lag(close))*100,
+            rcClose = (lClose - Lag(lClose))*100
               )
-ts |> group_by(symbol) |>
+
+pl1 <- ts |> group_by(symbol) |>
+    ggplot(aes(x = date, y = rsClose, color = symbol)) +
+    geom_line(size = 0.5) +
+    scale_y_continuous() +
+    labs(title = "Retorno Simples",
+         x = "", y = "Retorno", color = "") +
+    facet_wrap(~ symbol, nrow = 2, scales = "free_y") +
+    theme_tq() 
+ggplotly(pl1)
+
+pl2 <- ts |> group_by(symbol) |>
     ggplot(aes(x = date, y = rcClose, color = symbol)) +
-    geom_line(size = 1) +
+    geom_line(size = 0.5) +
+    scale_y_continuous() +
     labs(title = "Retorno Composto",
          x = "", y = "Retorno", color = "") +
-    facet_wrap(~ symbol, ncol = 2, scales = "free_y") +
-#    scale_y_continuous(labels = scales::dollar) +
+    facet_wrap(~ symbol, nrow = 2, scales = "free_y") +
     theme_tq() 
+
+ggplotly(pl2)
 ```
+
 
 
 

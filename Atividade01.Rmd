@@ -1,0 +1,301 @@
+---
+title: "Atividade - 01"
+author: "Ramiro Haase and André Pellizzaro"
+output:
+  html_document:  rmdformats::robobook
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r, include=FALSE}
+#setwd("C:/Users/ramir/OneDrive/Desktop/EESP/Financial Econometrics/Atividades")
+
+#C:/Users/ramir/OneDrive/Desktop/EESP/Financial Econometrics/Dados/
+```
+
+```{r, include=FALSE}
+library(readxl)
+library(xts)
+library(rmutil)
+library(tidyverse)
+library(kableExtra)
+library(fBasics)
+library(tseries)
+```
+
+## Data
+The objetive of this homework is to present some stylized facts in Financial Data.
+First, we colect data from the closing prices of BBAS3 and IBOV:
+
+```{r}
+DADOS_BR <- read_excel("DADOS_BR_SB.xlsx")
+#View(DADOS_BR)
+
+DF = data.frame(DADOS_BR$Date, DADOS_BR$BBAS3_SB, DADOS_BR$IBOVC_SB) |> drop_na()
+
+# Banco do Brasil SA (BBAS3)
+BBAS.ts = xts(as.numeric(DF$DADOS_BR.BBAS3_SB), order.by=as.Date(DF$DADOS_BR.Date))
+
+# Bovespa Index (IBOV)
+IBOV.ts = xts(as.numeric(DF$DADOS_BR.IBOVC_SB), order.by=as.Date(DF$DADOS_BR.Date))
+```
+
+## Ploting the closing price {.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+```{r}
+plot(BBAS.ts, main = "BBAS3 Closing Price", ylab = "Price in R$")
+```
+
+### IBOV
+
+```{r}
+plot(IBOV.ts, main = "BOVESPA Closing Price", ylab = "Index")
+```
+
+# Generating and Ploting Simple Returns {.tabset .tabset-fade .tabset-pills}
+
+The price series are not stationary so we will use simple returns. Defined by:
+
+$$ R_t = \cfrac{P_t-P_{t-1}}{P_{t-1}} $$
+
+## BBAS3
+
+```{r}
+# BBAS3
+BBAS.rs.ts = xts(matrix(NA, nrow = 5880, ncol = 1), order.by=as.Date(DF$DADOS_BR.Date))
+for (i in 2:5880) {
+    BBAS.rs.ts[[i]] = ((BBAS.ts[[i]]-BBAS.ts[[i-1]])/BBAS.ts[[i-1]])
+}
+plot(BBAS.rs.ts, main = "BBAS3 Simple Return")
+```
+
+## IBOV
+
+```{r}
+# IBOV
+IBOV.rs.ts = xts(matrix(NA, nrow = 5880, ncol = 1), order.by=as.Date(DF$DADOS_BR.Date))
+for (i in 2:5880) {
+    IBOV.rs.ts[[i]] = ((IBOV.ts[[i]]-IBOV.ts[[i-1]])/IBOV.ts[[i-1]])
+}
+
+plot(IBOV.rs.ts, main = "BOVESPA Simple Return")
+```
+
+# Generating and Ploting Compounded Returns{.tabset .tabset-fade .tabset-pills}
+
+Or, we may use compounded returns. Defined by:
+
+$$ Y_t = ln(P_t)-ln(P_{t-1}) $$
+
+## BBAS3
+
+```{r}
+# BBAS3
+BBAS.rc.ts = xts(matrix(NA, nrow = 5880, ncol = 1), order.by=as.Date(DF$DADOS_BR.Date))
+for (i in 2:5880) {
+    BBAS.rc.ts[[i]] = log(BBAS.ts[[i]]) - log(BBAS.ts[[i-1]])
+}
+plot(BBAS.rc.ts, main = "BBAS3 Compounded Return")
+```
+
+## IBOV
+
+```{r}
+
+# IBOV
+IBOV.rc.ts = xts(matrix(NA, nrow = 5880, ncol = 1), order.by=as.Date(DF$DADOS_BR.Date))
+for (i in 2:5880) {
+    IBOV.rc.ts[[i]] = log(IBOV.ts[[i]]) - log(IBOV.ts[[i-1]])
+}
+
+plot(IBOV.rc.ts, main = "BOVESPA Compounded Return")
+```
+
+
+# Summary statistics {.tabset .tabset-fade .tabset-pills}
+
+We have some summary statistics for the assets. We also run the Test Jarque-Bera.
+
+## BBAS3
+This indicates that the test statistic is 8328.2, with a p-value of < 2.2e-16. We would reject the null hypothesis that the data is normally distributed in this circumstance.
+```{r}
+basicStats(BBAS.rc.ts) |>   
+  kbl(caption = "Estatísticas Descritivas para BBAS") |>
+  kable_classic(full_width = F)
+jarque.bera.test(BBAS.rc.ts[2:5880])
+```
+
+## IBOV
+This indicates that the test statistic is 13427, with a p-value of < 2.2e-16. We would reject the null hypothesis that the data is normally distributed in this circumstance.
+```{r}
+basicStats(IBOV.rc.ts) |>   
+  kbl(caption = "Estatísticas Descritivas para IBOV") |>
+  kable_classic(full_width = F)
+jarque.bera.test(IBOV.rc.ts[2:5880])
+```
+
+
+
+# Histogram of Returns {.tabset .tabset-fade .tabset-pills}
+
+Indeed, the data`s distribution has heavier tails and a taller peak. In red line, we have the data and the blue line is a Normal Distribution.
+
+## BBAS3
+
+```{r}
+# BBAS3
+m.bbas = mean(BBAS.rc.ts, na.rm=TRUE)
+std.bbas = sqrt(var(BBAS.rc.ts, na.rm=TRUE))
+
+
+
+hist(BBAS.rc.ts, breaks=100, prob=T, 
+     xlab="BBAS3", ylim=c(0, 25), xlim=c(-0.1,0.1),
+     main="BBAS3 Returns")
+lines(density(BBAS.rc.ts[2:5880]), col = "red")   
+curve(dnorm(x, mean=m.bbas, sd=std.bbas), 
+      col="darkblue", lwd=2, add=TRUE, yaxt="n")
+```
+
+## IBOV
+
+```{r}
+#IBOV
+m.ibov = mean(IBOV.rc.ts, na.rm=TRUE)
+std.ibov = sqrt(var(IBOV.rc.ts, na.rm=TRUE))
+
+hist(IBOV.rc.ts, breaks=100, prob=TRUE, 
+     xlab="IBOV", ylim=c(0, 30), xlim=c(-0.05,0.05),
+     main="BOVESPA Returns")
+lines(density(IBOV.rc.ts[2:5880]), col = "red")   
+curve(dnorm(x, mean=m.ibov, sd=std.ibov), 
+      col="darkblue", lwd=2, add=TRUE, yaxt="n")
+```
+
+# ACF and PACF of Returns {.tabset .tabset-fade .tabset-pills}
+
+We can see in both process that ACF has several autocorrelations that are significantly non-zero. Therefore, the time series is non-random. In addition, the PACF does not have a strong correlation of the initial lags that suggests white noise.
+
+## BBAS3
+
+```{r}
+# BBAS3
+par(mfcol=c(1,2))
+acf(BBAS.rc.ts, lag.max=20,main='ACF BBAS3 Returns',  na.action = na.pass)
+pacf(BBAS.rc.ts, lag.max=20,main='PACF BBAS3 Returns',  na.action = na.pass)
+```
+
+## IBOV
+
+```{r}
+# IBOV
+par(mfcol=c(1,2))
+acf(IBOV.rc.ts, lag.max=20,main='ACF IBOV Returns',  na.action = na.pass)
+pacf(IBOV.rc.ts, lag.max=20,main='PACF IBOV Returns',  na.action = na.pass)
+```
+
+# ACF and PACF of Returns Squared {.tabset .tabset-fade .tabset-pills}
+
+In this case, all correlations are strong for all lags in the ACF and the PACF has out of range correlations that suggest a non-stationary Random-Walk process.
+
+## BBAS3
+
+```{r}
+# BBAS3
+par(mfcol=c(1,2))
+acf((BBAS.rc.ts)^2, lag.max=20,main='ACF BBAS3 Returns Squared',  na.action = na.pass)
+pacf((BBAS.rc.ts)^2, lag.max=20,main='PACF BBAS3 Returns Squared',  na.action = na.pass)
+```
+
+## IBOV
+
+```{r}
+# IBOV
+par(mfcol=c(1,2))
+acf((IBOV.rc.ts)^2, lag.max=20,main='ACF IBOV Returns Squared',  na.action = na.pass)
+pacf((IBOV.rc.ts)^2, lag.max=20,main='PACF IBOV Returns Squared',  na.action = na.pass)
+```
+
+# Squared Returns Plots {.tabset .tabset-fade .tabset-pills}
+
+
+For cluster volatility, the high and low volatility moments ocorrs in same moments.
+
+## BBAS3
+
+```{r}
+# BBAS3
+par(mfcol=c(2,1))
+plot(BBAS.rc.ts, main = "BBAS3 Returns")
+plot((BBAS.rc.ts)^2, main = "BBAS3 Squared Returns")
+```
+
+## IBOV
+
+```{r}
+# IBOV
+par(mfcol=c(2,1))
+plot(IBOV.rc.ts, main = "IBOV Returns")
+plot((IBOV.rc.ts)^2, main = "IBOV Squared Returns")
+```
+
+# Correlation Plot
+
+```{r}
+par(mfrow=c(1,2))
+# Correlation Returns
+plot(as.numeric(BBAS.rc.ts), as.numeric(IBOV.rc.ts), pch = 19, col = "blue", xlab = "BBAS3", ylab = "IBOV", main = "Correlation")
+abline(lm(as.numeric(BBAS.rc.ts) ~ as.numeric(IBOV.rc.ts)), col = "red", lwd = 3)
+
+# Correlation Returns Squared
+plot(as.numeric((BBAS.rc.ts)^2), as.numeric((IBOV.rc.ts)^2), pch = 19, col = "blue", xlab = "BBAS3 SQ", ylab = "IBOV SQ", main = "Correlation")
+abline(lm(as.numeric((BBAS.rc.ts)^2) ~ as.numeric((IBOV.rc.ts)^2)), col = "red", lwd = 3)
+```
+
+
+# Leverage Effects{.tabset .tabset-fade .tabset-pills}
+
+For leverage effects, price movements are adjusted with volatility. If the asset price is falling, there is an increase in the firm's leverage and, in general, also an increase in uncertainty, which increases the volatility.
+
+## BBAS3
+
+```{r}
+par(mfcol=c(2,1))
+plot(BBAS.ts, main = "BBAS3")
+plot((BBAS.rc.ts)^2, main = "BBAS3 Squared Returns")
+```
+
+## IBOV
+
+```{r}
+# IBOV
+par(mfcol=c(2,1))
+plot(IBOV.ts, main = "IBOV")
+plot((IBOV.rc.ts)^2, main = "IBOV Squared Returns")
+```
+
+
+# Co-movimentos de volatilidade
+
+When market shocks occur in 2008, 2017 and 2020, we have that the volatilities follow for the two assets in their return.
+
+```{r}
+
+par(mfcol=c(2,1))
+plot(BBAS.rc.ts, main = "BBAS3 Returns")
+
+plot(IBOV.rc.ts, main = "IBOV Returns")
+
+```
+
+```{r echo=FALSE}
+plot(as.numeric(BBAS.rc.ts),as.numeric(IBOV.rc.ts),xlab = "BBAS3 R", ylab = "IBOV R")
+abline(0,0)
+```
+
+
