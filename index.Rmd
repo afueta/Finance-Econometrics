@@ -17,6 +17,8 @@ options(scipen=999)
 library(tidyquant)
 library(tidyverse)
 library(plotly)
+library(fBasics)
+library(kableExtra)
 df <- tq_get(c("^BVSP","BBAS3.SA"), get = "stock.prices", from = "2016-01-01", complete_cases = FALSE)
 ```
 
@@ -30,8 +32,8 @@ ts <- df |>
   summarise(date = date, 
             close = close , 
             lClose = log(close), 
-            rsClose = ((close-Lag(close))/Lag(close))*100,
-            rcClose = (lClose - Lag(lClose))*100
+            rsClose = as.numeric(((close-Lag(close))/Lag(close))*100),
+            rcClose = as.numeric((lClose - Lag(lClose))*100)
               )
 
 pl1 <- ts |> group_by(symbol) |>
@@ -56,7 +58,28 @@ pl2 <- ts |> group_by(symbol) |>
 ggplotly(pl2)
 ```
 
-As duas metodólogias de retorno são usadas para estacionarizar a série, podemos perceber que ambas produzem 
+O retorno simples percentual de um ativo é a variação percentual dos preços. Os retornos compostos continuamente é definido como o logarítmo da variação dos preços. As duas metodólogias de retorno são usadas para estacionarizar a série, podemos perceber que ambas cumprem seu papel além de produzir valores muito parecidos próximos do zero. Porém, a principal diferença está na propriedade do retorno composto, uma vez que basta somar os retornos dos períodos para compor o retorno acumulado.
+
+Portanto, daqui para frente usaremos o retorno composto para análise.
+
+## Estatísticas Descritivas
+
+Apresentamos estatísticas descritivas do retorno composto dos ativos.
+
+```{r}
+
+tabela <- basicStats(subset(ts,symbol == "^BVSP")$rcClose)
+tabela <- basicStats(subset(ts,symbol != "^BVSP")$rcClose) |> cbind(tabela)
+colnames(tabela)<-c("BVSP","BBAS")
+tabela |>
+  kbl(caption = "Estatísticas Descritivas") |>
+  kable_classic(full_width = F)
+
+```
+
+
+
+
 
 
 
