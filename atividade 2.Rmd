@@ -1,0 +1,328 @@
+---
+title: "Atividade 2"
+author: "Ramiro Haase and André Pellizzaro"
+output: html_notebook
+---
+
+```{r, include=FALSE}
+#setwd("C:/Users/ramir/OneDrive/Desktop/EESP/Financial Econometrics/Atividades")
+rm(list=ls())
+#C:/Users/ramir/OneDrive/Desktop/EESP/Financial Econometrics/Dados/
+```
+
+```{r, include=FALSE}
+library(readxl)
+library(xts)
+library(rmutil)
+library(tidyverse)
+library(kableExtra)
+library(fBasics)
+library(tseries)
+library(forecast)
+library(quantmod)
+
+```
+
+## Carregando os dados
+```{r message=FALSE, warning=FALSE}
+df <- read_excel("DADOS_BR_SB.xlsx") |> select(Date,BBAS3_SB,IBOVC_SB) |> drop_na()
+# Banco do Brasil SA (BBAS3)
+bbas <- xts(as.numeric(df$BBAS3_SB), order.by=as.Date(df$Date))
+# Bovespa Index (IBOV)
+ibov <- xts(as.numeric(df$IBOVC_SB), order.by=as.Date(df$Date))
+```
+
+## ACF and PACF{.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+```{r}
+par(mfrow=c(1,2))
+ggAcf(bbas, lag.max=12 , main = "")
+ggPacf(bbas, lag.max=12, main = "")
+```
+
+### IBOV
+
+```{r}
+par(mfrow=c(1,2))
+ggAcf(ibov, lag.max=12, main = "")
+ggPacf(ibov, lag.max=12, main = "")
+```
+## Estacionaridade{.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+Transformando em Log e teste para estacionaridade. Pelo teste de Augmented Dickey-Fuller, rejeitamos a hipótese nula para série estacionária. Além disso, `ndiffs()` retona um número inteiro indicando quantas diferenças são requeridas para estacionaridade.
+
+```{r}
+lbbas <- log(bbas)
+adf.test(lbbas)
+ndiffs(lbbas,test="adf")
+```
+
+Assim, fazendo a primeira diferença e realizando os mesmos testes anteriores. Adicionalmente, incluímos o teste KPSS que é usado com a hipótese nula de uma raiz estacionária contra uma alternativa de raiz unitária. Concluímos portanto que a série em primeira diferença do `log()` é estacionária.
+
+```{r}
+dlbbas<- na.omit(100*diff(lbbas))
+
+par(mfrow=c(1,2))
+ggAcf(dlbbas, lag.max=12, main ='')
+ggPacf(dlbbas, lag.max=12, main ='')
+
+adf.test(dlbbas)
+ndiffs(dlbbas,test="adf")
+ndiffs(dlbbas,test="kpss")
+```
+### IBOV
+
+Transformando em Log e teste para estacionaridade. Pelo teste de Augmented Dickey-Fuller, rejeitamos a hipótese nula para série estacionária. Além disso, `ndiffs()` retona um número inteiro indicando quantas diferenças são requeridas para estacionaridade.
+
+```{r}
+libov <- log(ibov)
+adf.test(libov)
+ndiffs(libov,test="adf")
+```
+
+Assim, fazendo a primeira diferença e realizando os mesmos testes anteriores. Adicionalmente, incluímos o teste KPSS que é usado com a hipótese nula de uma raiz estacionária contra uma alternativa de raiz unitária. Concluímos portanto que a série em primeira diferença do `log()` é estacionária.
+
+```{r}
+dlibov<- na.omit(100*diff(libov))
+
+par(mfrow=c(1,2))
+Acf(dlibov, lag.max=12, main ='')
+Pacf(dlibov, lag.max=12, main ='')
+
+adf.test(dlibov)
+ndiffs(dlibov,test="adf")
+ndiffs(dlibov,test="kpss")
+```
+
+## Melhor modelo{.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+Usamos o critério informacional para melhor fittar um modelo ARIMA. Para isso usamos a função ` auto.arima()` que retorna o melhor modelo ARIMA de acordo com o valor AIC ou BIC. A função realiza uma pesquisa sobre o modelo possível dentro das restrições de ordem fornecidas. Porém, a 'fit' indicado não se mantém consistente dependendo da forma de aproximação da função. A aproximação que produz estimativas significantes é quando aplicamos o 'fit' na diferença do log. Assim, iremos utilizar o melhor modelo como ARIMA(1,1,1).
+
+```{r}
+#auto.arima(bbas)
+auto.arima(lbbas)
+auto.arima(lbbas,max.p=12,max.q=12,max.d=2,stepwise=FALSE,approx=FALSE, trace=F)
+auto.arima(dlbbas)
+auto.arima(dlbbas,max.p=12,max.q=12,max.d=2,stepwise=FALSE,approx=FALSE, trace=F)
+```
+
+
+```{r}
+eq1 <- arima(dlbbas, order=c(1,0,1), include.mean = TRUE, method= "ML")
+plot(eq1$residuals)
+abline(h = mean(eq1$residuals)+1.96*sd(eq1$residuals), col='red', lty=2)
+abline(h = mean(eq1$residuals)-1.96*sd(eq1$residuals), col='red', lty=2)
+```
+
+```{r}
+jarque.bera.test(eq1$residuals)
+```
+
+
+
+### IBOV
+
+Usamos o critério informacional para melhor fittar um modelo ARIMA. Para isso usamos a função ` auto.arima()` que retorna o melhor modelo ARIMA de acordo com o valor AIC ou BIC. A função realiza uma pesquisa sobre o modelo possível dentro das restrições de ordem fornecidas. Como comparação temos que tentar usar o critério informacional com descuido gera interpretações imprecisas. Concluímos que o melhor modelo é ARIMA(1,1,0).
+
+```{r}
+auto.arima(ibov)
+auto.arima(libov,max.p=12,max.q=12,max.d=2,stepwise=FALSE,approx=FALSE)
+auto.arima(dlibov,max.p=12,max.q=12,max.d=2,stepwise=FALSE,approx=FALSE)
+```
+
+
+
+
+```{r}
+eq2 <- arima(libov, order=c(1,1,1), include.mean = TRUE, method= "ML")
+plot(eq2$residuals)
+abline(h = mean(eq2$residuals)+1.96*sd(eq2$residuals), col='red', lty=2)
+abline(h = mean(eq2$residuals)-1.96*sd(eq2$residuals), col='red', lty=2)
+```
+
+```{r}
+jarque.bera.test(eq2$residuals)
+```
+## Estimando Recursivamente{.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+O melhor modelo escolhido inicialmente não é possivel ser estimado por OLS. Assim vamos considerar o ARIMA(1,1,0) e estimando o modelo por OLS
+```{r warning=TRUE}
+
+df_recursivo <- cbind(dlbbas,Lag(dlbbas))
+colnames(df_recursivo) <- c("dlbbas", "dlbbas_lag")
+eq1r <- lapply(seq(10, length(dlbbas)), function(x) lm(dlbbas ~ dlbbas_lag, data = df_recursivo[1:x, ]))
+summary(eq1r[[1]])
+length(eq1r)
+
+# storing all coefficients
+all_intercepts <- unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[1]))
+all_slopes<-unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[2]))
+all_slopes[1]  # slope from the first regression
+
+# storing sd
+sd_intercepts <- unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[3]))
+sd_slopes<-unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[4]))
+sd_slopes[1]  # slope sd from the first regression 
+
+# plotting the coefficients
+par(mfrow = c(2,1))
+
+plot.zoo(cbind(all_intercepts, 
+               all_intercepts+ sd_intercepts*1.96, 
+               all_intercepts-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - intercept", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+
+plot.zoo(cbind(all_slopes, 
+               all_slopes+ sd_intercepts*1.96, 
+               all_slopes-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - phi", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+
+
+```
+```{r}
+# CUSUM 
+cusum <- strucchange::efp(dlbbas ~ Lag(dlbbas), type = "Rec-CUSUM")
+plot(cusum, ylab = "")
+
+# CUSUMQ
+residrls2 <- eq1$residuals^2 
+cusumq <- cumsum(c(0, residrls2))/sum(residrls2)
+plot(cusumq, type = "l", main = "Recursive CUSUMQ test", ylab = "")
+```
+
+
+
+```{r}
+# Prediction of Dollar
+bbas_ff <- c()
+h <- 7
+for(i in 0:(h-1)){
+  eq1 <- Arima(bbas[1:(length(bbas)-h+i),], order = c(1,1,0))   
+  aux_eq1_f <- forecast(eq1, h = 1)$mean  
+  bbas_ff <- rbind(bbas_ff, aux_eq1_f)
+}
+
+
+bbas_f <- bbas[(length(bbas)-(h-1)):length(bbas)]
+
+par(mfrow=c(1,1))
+plot.zoo(cbind(bbas_f, bbas_ff,
+               bbas_ff + 1.96*sd(bbas_ff),
+               bbas_ff - 1.96*sd(bbas_ff)), 
+         plot.type = "single",
+         col = c(1,2,3,3), 
+         ylab = "",
+         xlab = "", 
+)
+legend("top", inset=c(0,0),  horiz=TRUE, cex = .8,
+       y.intersp = 1, lty = 1, bty = "n", 
+       legend = c("Observed", "Forecast", "LS and LI"), col = c(1,2,3,3))
+```
+
+
+
+### IBOV
+
+Assim vamos considerar o ARIMA(1,1,0) e estimando o modelo por OLS
+```{r warning=TRUE}
+
+df_recursivo <- cbind(dlibov,Lag(dlibov))
+colnames(df_recursivo) <- c("dlibov", "dlibov_lag")
+eq1r <- lapply(seq(10, length(dlibov)), function(x) lm(dlibov ~ dlibov_lag, data = df_recursivo[1:x, ]))
+summary(eq1r[[1]])
+length(eq1r)
+
+# storing all coefficients
+all_intercepts <- unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[1]))
+all_slopes<-unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[2]))
+all_slopes[1]  # slope from the first regression
+
+# storing sd
+sd_intercepts <- unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[3]))
+sd_slopes<-unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[4]))
+sd_slopes[1]  # slope sd from the first regression 
+
+# plotting the coefficients
+par(mfrow = c(2,1))
+
+plot.zoo(cbind(all_intercepts, 
+               all_intercepts+ sd_intercepts*1.96, 
+               all_intercepts-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - intercept", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+
+plot.zoo(cbind(all_slopes, 
+               all_slopes+ sd_intercepts*1.96, 
+               all_slopes-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - phi", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+
+
+```
+
+
+```{r}
+# CUSUM 
+cusum <- strucchange::efp(dlibov ~ Lag(dlibov), type = "Rec-CUSUM")
+plot(cusum, ylab = "")
+
+# CUSUMQ
+residrls2 <- eq2$residuals^2 
+cusumq <- cumsum(c(0, residrls2))/sum(residrls2)
+plot(cusumq, type = "l", main = "Recursive CUSUMQ test", ylab = "")
+```
+
+
+
+```{r}
+
+ibov_ff <- c()
+h <- 7
+for(i in 0:(h-1)){
+  eq1 <- Arima(ibov[1:(length(ibov)-h+i),], order = c(1,1,0))   
+  aux_eq1_f <- forecast(eq1, h = 1)$mean  
+  ibov_ff <- rbind(ibov_ff, aux_eq1_f)
+}
+
+
+ibov_f <- ibov[(length(ibov)-(h-1)):length(ibov)]
+
+par(mfrow=c(1,1))
+plot.zoo(cbind(ibov_f, ibov_ff,
+               ibov_ff + 1.96*sd(ibov_ff),
+               ibov_ff - 1.96*sd(ibov_ff)), 
+         plot.type = "single",
+         col = c(1,2,3,3), 
+         ylab = "",
+         xlab = "", 
+)
+legend("top", inset=c(0,0),  horiz=TRUE, cex = .8,
+       y.intersp = 1, lty = 1, bty = "n", 
+       legend = c("Observed", "Forecast", "LS and LI"), col = c(1,2,3,3))
+```
+
+
+
+
