@@ -1,7 +1,9 @@
 ---
 title: "Atividade 2"
 author: "Ramiro Haase and André Pellizzaro"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r, include=FALSE}
@@ -32,23 +34,24 @@ bbas <- xts(as.numeric(df$BBAS3_SB), order.by=as.Date(df$Date))
 ibov <- xts(as.numeric(df$IBOVC_SB), order.by=as.Date(df$Date))
 ```
 
-## ACF and PACF{.tabset .tabset-fade .tabset-pills}
+## ACF e PACF{.tabset .tabset-fade .tabset-pills}
 
 ### BBAS3
 
 ```{r}
-par(mfrow=c(1,2))
-ggAcf(bbas, lag.max=12 , main = "")
-ggPacf(bbas, lag.max=12, main = "")
+
+ggAcf(bbas, lag.max=12 )
+ggPacf(bbas, lag.max=12)
 ```
 
 ### IBOV
 
 ```{r}
-par(mfrow=c(1,2))
-ggAcf(ibov, lag.max=12, main = "")
-ggPacf(ibov, lag.max=12, main = "")
+
+ggAcf(ibov, lag.max=12)
+ggPacf(ibov, lag.max=12)
 ```
+
 ## Estacionaridade{.tabset .tabset-fade .tabset-pills}
 
 ### BBAS3

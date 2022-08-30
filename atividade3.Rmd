@@ -1,0 +1,180 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+options(scipen=999)
+library(tidyverse)
+library(forecast)
+library(tseries)
+library(readxl)
+library(xts)
+library(tvReg)
+library(seasonal)
+library(shiny)
+```
+
+Obtendo os dados
+
+```{r message=FALSE, warning=FALSE}
+df <- read_excel("DADOS_BR_SB.xlsx")
+
+selic <- xts(as.numeric(df$Selic252_SB), order.by = as.Date(df$Date)) |> 
+  log() |> diff.xts() %>% `*`(100) |> na.omit()
+ibov <- xts(as.numeric(df$IBOVC_SB), order.by = as.Date(df$Date)) |> 
+  log() |> diff.xts() %>% `*`(100) |> na.omit()
+bbas <- xts(as.numeric(df$BBAS3_SB), order.by = as.Date(df$Date)) |> 
+  log() |> diff.xts() %>% `*`(100) |> na.omit()
+```
+
+
+Calculando os excessos de retorno
+
+```{r}
+exrcp_bbas <- bbas - selic
+plot.xts(exrcp_bbas)
+exrcp_ibov <- ibov - selic
+plot.xts(exrcp_ibov)
+```
+
+Sobre as hipóteses, não é normal, é correlacionado com o passado.
+
+Estimando o modelo por MQO. Por violar as hipóteses acima, parametros não são consistentes. 
+Basta ver que $\alpha$ é não significante.
+
+```{r}
+
+capm <- lm(exrcp_bbas ~ exrcp_ibov)
+summary(capm)
+
+```
+
+Estimando por MQR. O parametro $\alpha$ tem valor proximo ao estimado por MQO e a janela estimada por MQR está dentro da estimativa por MQO. O parametro $\beta$ pode estar superestimado por MQO ja que a estivativa recursiva cresce ligeralmente ao longo do tempo.
+
+```{r}
+## Estimando Recursivamente
+df_recursivo <- cbind(exrcp_bbas,exrcp_ibov)
+colnames(df_recursivo) <- c("exrcp_bbas", "exrcp_ibov")
+eq1r <- lapply(seq(10, length(exrcp_bbas)), function(x) lm(exrcp_bbas ~ exrcp_ibov, data = df_recursivo[1:x, ]))
+# Obtendo todos os coeficients
+all_intercepts <- unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[1]))
+all_slopes <- unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[2]))
+# sd
+sd_intercepts <- unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[3]))
+sd_slopes<-unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[4]))
+# Plotando coeficientes
+par(mfrow = c(1,1))
+
+plot.zoo(cbind(all_intercepts, 
+               all_intercepts+ sd_intercepts*1.96, 
+               all_intercepts-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Estimação Recursiva - Alfa", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+
+plot.zoo(cbind(all_slopes, 
+               all_slopes + sd_intercepts*1.96, 
+               all_slopes - sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Estimação Recursiva - Beta", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+```
+
+Estimando por o modelo 
+
+$$ y_t = \alpha_t +\beta_t \cdot x_t $$
+$$ \beta_t = \beta_{t-1} + \eta_t  $$
+$$ \alpha_t = \bar{y_t} - \beta_t \cdot \bar{x_t}  $$
+
+
+```{r}
+
+model.tvLM <- tvLM(exrcp_bbas~exrcp_ibov)
+summary(model.tvLM)
+
+```
+
+
+Vermelho = MQO
+
+Preto = MQR
+
+Azul = estimação variável
+
+
+```{r}
+
+a <- seq(1,5879) |> as_tibble()
+a$variavel <- model.tvLM$coefficients[,1]
+a$recursivo <- c(all_intercepts,rep(NA,9))
+
+ggplot(a,aes(x=value,y=recursivo)) +
+  geom_line() +
+  geom_line(aes(y=variavel), color= "blue") +
+  geom_hline(yintercept=0.03388,color = "red") +
+  labs(x="",y="",title = "Estimação do Alfa")
+
+```
+
+Vermelho = MQO
+
+Preto = MQR
+
+Azul = estimação variável
+
+```{r}
+
+a <- seq(1,5879) |> as_tibble()
+a$variavel <- model.tvLM$coefficients[,2]
+a$recursivo <- c(all_slopes,rep(NA,9))
+
+ggplot(a,aes(x=value,y=recursivo)) +
+  geom_line() +
+  geom_line(aes(y=variavel), color= "blue") +
+  geom_hline(yintercept=1.05728, color = "red") +
+  labs(x="",y="",title = "Estimação do Beta")
+
+```
+
+
+```{r}
+
+exrcp_bbas_m <- apply.monthly(exrcp_bbas, mean) |> ts(start=c(2000,1),frequency=12)
+exrcp_ibov_m <- apply.monthly(exrcp_ibov, mean) |> ts(start=c(2000,1),frequency=12)
+```
+
+
+```{r}
+m <- seas(exrcp_bbas_m)
+monthplot(m, choice = "irregular")
+
+Pacf(resid(m))
+spectrum(diff(resid(m)))
+plot(density(resid(m)))
+qqnorm(resid(m))
+
+
+```
+
+```{r}
+m <- seas(exrcp_ibov_m)
+monthplot(m, choice = "irregular")
+
+Pacf(resid(m))
+spectrum(diff(resid(m)))
+plot(density(resid(m)))
+qqnorm(resid(m))
+
+
+```
+
+
+
+
+
+

@@ -1,0 +1,357 @@
+---
+title: "Atividade 2"
+author: "Ramiro Haase and André Pellizzaro"
+output:  html_document
+---
+
+```{r, include=FALSE}
+#setwd("C:/Users/ramir/OneDrive/Desktop/EESP/Financial Econometrics/Atividades/Atividade 02")
+
+#C:/Users/ramir/OneDrive/Desktop/EESP/Financial Econometrics/Dados/
+```
+
+```{r, include=FALSE}
+library(readxl)
+library(xts)
+library(rmutil)
+library(tidyverse)
+library(kableExtra)
+library(fBasics)
+library(tseries)
+library(forecast)
+library(quantmod)
+```
+
+## Carregando os dados
+```{r message=FALSE, warning=FALSE}
+df <- read_excel("DADOS_BR_SB.xlsx")
+# Banco do Brasil SA (BBAS3)
+bbas <- na.omit(xts(as.numeric(df$BBAS3_SB), order.by=as.Date(df$Date)))
+# Bovespa Index (IBOV)
+ibov <- na.omit(xts(as.numeric(df$IBOVC_SB), order.by=as.Date(df$Date)))
+```
+
+
+## Morettin-Valls Window {.tabset .tabset-fade .tabset-pills}
+
+Começamos nossa análise pela Morettin-Valls Window de ambos ativos, Banco do Brasil SA - BBAS3 e Índice Bovespa - IBOV, já trabalhando com o log das séries. Utilizamos aproximadamente 15% do ínicio da amostra (as primeiras 885 observações) para contruir nossas bandas. Pela análise dos gráficos podemos observar que os dois ativos não parecem ser estacionários. Em ambos os gráficos temos que as séries dos logs dos ativos saem da banda já logo no ínicio do período análisado.
+
+### BBAS3
+
+```{r}
+## Gerando a variável Log do BBAS3
+lbbas <- log(bbas)
+## Morettin-Valls Window para o Log BBAS3
+mean_lbbas<-mean(lbbas[1:885])
+stdev_lbbas<-sd(lbbas[1:885])
+plot.ts(lbbas)
+abline(h=mean_lbbas+1.96*stdev_lbbas, col='red', lty=2)
+abline(h=mean_lbbas-1.96*stdev_lbbas, col='red', lty=2)
+```
+
+
+### IBOV
+
+```{r}
+## Gerando a variável Log do IBOV
+libov <- log(ibov)
+## Morettin-Valls Window para o Log IBOV
+mean_libov<-mean(libov[1:885])
+stdev_libov<-sd(libov[1:885])
+plot.ts(libov)
+abline(h=mean_libov+1.96*stdev_libov, col='red', lty=2)
+abline(h=mean_libov-1.96*stdev_libov, col='red', lty=2)
+```
+
+
+
+## ACF and PACF{.tabset .tabset-fade .tabset-pills}
+
+Em ambas as séries, a análise da FAC indica que as séries são não estácionarias, dado que quase não há decaimento das autocorrelações, o que sugere que uma transformação é nescessária para induzir estacionariedade. Temos que os valores futuros da série são fortemente correlacionados com seus valores passados, com a correlação se mantendo estável próxima de 1. Isso índica que a média da série varia com o tempo, o que tambem observamos na Morettin-Valls Window, e então temos que esses processos são não estácionarios. A análise da FACP sugere uma ordem AR(1) para ambos ativos, com o primeiro lag sendo estatisticamente significativo e todas as demais autocorrelações parciais não estatisticamente significativas. 
+
+### BBAS3
+
+```{r}
+par(mfrow=c(1,2))
+Acf(lbbas, lag.max=12, main = "BBAS3")
+Pacf(lbbas, lag.max=12, main = "BBAS3")
+```
+
+### IBOV
+
+```{r}
+par(mfrow=c(1,2))
+Acf(libov, lag.max=12, main = "IBOV")
+Pacf(libov, lag.max=12, main = "IBOV")
+```
+
+
+## Estacionaridade{.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+Pelo teste de Augmented Dickey-Fuller, rejeitamos a hipótese nula de que a série é estacionária, como esperavamos dada nossa análise inicial. Além disso, `ndiffs()` retona um número inteiro indicando quantas diferenças são requeridas para estacionaridade.
+
+```{r}
+adf.test(lbbas)
+ndiffs(lbbas,test="adf")
+```
+
+Assim, tiramos a primeira diferença da série e realizamos os mesmos testes anteriores. Adicionalmente, incluímos o teste KPSS que é usado com a hipótese nula de uma raiz estacionária contra uma alternativa de raiz unitária. Concluímos portanto que a série em primeira diferença do log é estacionária.
+
+```{r}
+dlbbas<- na.omit(100*diff(lbbas))
+par(mfrow=c(1,1))
+plot.ts(dlbbas)
+mean_dlbbas<-mean(dlbbas[1:885])
+stdev_dlbbas<-sd(dlbbas[1:885])
+abline(h=mean_dlbbas+1.96*stdev_dlbbas, col='red', lty=2)
+abline(h=mean_dlbbas-1.96*stdev_dlbbas, col='red', lty=2)
+```
+
+A análise da Morettin-Valls Window do processo em primeira diferença sugere que nossa nova série é estacionária, com média e variância aparentemente constantes ao longo da amostra. No entanto a FAC indica que a série não é ruído branco.
+
+```{r}
+par(mfrow=c(1,2))
+Acf(dlbbas, lag.max=12)
+Pacf(dlbbas, lag.max=12)
+
+adf.test(dlbbas)
+ndiffs(dlbbas,test="adf")
+ndiffs(dlbbas,test="kpss")
+```
+
+A análise das FAC e FACP da primeira diferença do Log BBAS3 não indica um modelo simples AR ou MA puro. A série aparanta ser estacionária, com apenas alguns pontos saindo da banda. 
+
+
+
+### IBOV
+
+Pelo teste de Augmented Dickey-Fuller, rejeitamos a hipótese nula para série estacionária. Além disso, `ndiffs()` retona um número inteiro indicando quantas diferenças são requeridas para estacionaridade.
+
+```{r}
+adf.test(libov)
+ndiffs(libov,test="adf")
+```
+
+Com isso, tiramos a primeira diferença e realizando os mesmos testes anteriores. Adicionalmente, incluímos o teste KPSS que é usado com a hipótese nula de uma raiz estacionária contra uma alternativa de raiz unitária. Concluímos portanto que a série em primeira diferença do log é estacionária.
+
+```{r}
+dlibov<- na.omit(100*diff(libov))
+par(mfrow=c(1,1))
+plot.ts(dlibov)
+mean_dlibov<-mean(dlibov[1:885])
+stdev_dlibov<-sd(dlibov[1:885])
+abline(h=mean_dlibov+1.96*stdev_dlibov, col='red', lty=2)
+abline(h=mean_dlibov-1.96*stdev_dlibov, col='red', lty=2)
+```
+
+A análise da Morettin-Valls Window do processo em primeira diferença sugere que, assim como no BBAS3, nossa nova série é estacionária, com média e variância aparentemente constantes ao longo da amostra. No entanto a FAC indica que a série não é ruído branco.
+
+```{r}
+par(mfrow=c(1,2))
+Acf(dlibov, lag.max=12, main ='')
+Pacf(dlibov, lag.max=12, main ='')
+
+adf.test(dlibov)
+ndiffs(dlibov,test="adf")
+ndiffs(dlibov,test="kpss")
+```
+
+A análise das FAC e FACP da primeira diferença do Log IBOV não indica um modelo simples AR ou MA puro. A série aparanta ser estacionária, com apenas alguns pontos saindo da banda. 
+
+
+
+## Melhor modelo{.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+Usamos o critério informacional para melhor fittar um modelo ARIMA. Para isso usamos a função ` auto.arima()` que retorna o melhor modelo ARIMA de acordo com o valor AIC ou BIC. A função realiza uma pesquisa entre modelo possíveis dadas as restrições de ordem fornecidas.
+
+```{r}
+## Selecionando possíveis modelos via auto.arima (AIC e BIC)
+
+auto.arima(dlbbas, max.p =12, max.q = 12, max.order = 12, seasonal =  FALSE, trace = FALSE, ic = "bic", method = "ML", approximation = FALSE, stepwise = FALSE) #ARIMA(0,0,0) with zero mean
+auto.arima(dlbbas, max.p =12, max.q = 12, max.order = 12, seasonal =  FALSE, trace = FALSE, ic = "aic", method = "ML", approximation = FALSE, stepwise = FALSE) #ARIMA(1,0,6) with non-zero mean
+```
+
+Inicialmente foi realizada uma primeira seleção através da função auto.arima. O argumento 'seasonal' da função foi definido como falso, para que apenas modelos ARIMA(p,d,q) fossem comparados. O metodo utilizado foi a máxima verossimilhança e os argumentos 'approximation' e 'stepwise' foram ambos definidos como falso para que todos os modelos fossem comparados. Os valores máximos de p e q foram definidos em 12 com base no padrão indicado pela ACF.
+O critério de informação BIC (mod1) indica um modelo ARIMA(0,0,0) com média zero. O critério AIC (mod2) indica um modelo ARIMA(1,0,6) com média não zero como modelo. Como o modelo ARIMA(0,0,0) com média zero tem pouco valor informativo, vamos utilizar o modelo ARIMA(1,0,6) com média não zero, correndo o risco de que ele esteja super parametrizado.
+
+```{r}
+## Estimando ARIMA(1,0,6) with non-zero mean
+arma_bbas = arima(dlbbas, order=c(1,0,6), include.mean = TRUE, method= "ML")
+arma_bbas
+
+## Morettin-Valls Window para os Resíduos ARIMA(1,0,6) with non-zero mean
+par(mfrow=c(1,1))
+plot(arma_bbas$residuals)
+abline(h = mean(arma_bbas$residuals)+1.96*sd(arma_bbas$residuals), col='red', lty=2)
+abline(h = mean(arma_bbas$residuals)-1.96*sd(arma_bbas$residuals), col='red', lty=2)
+
+## FAC dos Resíduos ARIMA(1,0,6)
+Acf(arma_bbas$residuals, lag.max = 20)
+```
+
+A análise da Morettin-Valls Window parce indicar que os resíduos da estimação podem ser ruído branco, dado que a média e a variância são finitas e parecem serem constantes no tempo (a variância um pouco menos) no entanto a FAC dos Resíduos indica que os resídos não são ruído branco.
+
+
+```{r}
+jarque.bera.test(arma_bbas$residuals)
+```
+
+
+
+### IBOV
+
+Usamos o critério informacional para melhor fittar um modelo ARIMA. Para isso usamos a função ` auto.arima()` que retorna o melhor modelo ARIMA de acordo com o valor AIC ou BIC. A função realiza uma pesquisa entre modelo possíveis dadas as restrições de ordem fornecidas.
+
+```{r}
+## Selecionando possíveis modelos via auto.arima (AIC e BIC)
+
+auto.arima(dlibov, max.p =12, max.q = 12, max.order = 12, seasonal =  FALSE, trace = FALSE, ic = "bic", method = "ML", approximation = FALSE, stepwise = FALSE) #ARIMA(0,0,0) with zero mean
+auto.arima(dlibov, max.p =12, max.q = 12, max.order = 12, seasonal =  FALSE, trace = FALSE, ic = "aic", method = "ML", approximation = FALSE, stepwise = FALSE) #ARIMA(4,0,4) with zero mean
+```
+
+Inicialmente foi realizada uma primeira seleção através da função auto.arima. O argumento 'seasonal' da função foi definido como falso, para que apenas modelos ARIMA(p,d,q) fossem comparados. O metodo utilizado foi a máxima verossimilhança e os argumentos 'approximation' e 'stepwise' foram ambos definidos como falso para que todos os modelos fossem comparados. Os valores máximos de p e q foram definidos em 12 com base no padrão indicado pela ACF.
+O critério de informação BIC (mod3) indica um modelo ARIMA(0,0,0) com média zero. O critério AIC (mod4) indica um modelo ARIMA(4,0,4) com média zero como modelo. Como o modelo ARIMA(0,0,0) com média zero tem pouco valor informativo e o modelo ARIMA(4,0,4) com média zero provavelmente está super parametrizado, vamos considerar um modelo ARIMA(1,0,1) com média não zero para nossas estimações.
+
+```{r}
+## Estimando ARIMA(1,0,1) with non-zero mean
+arma_ibov = arima(dlibov, order=c(1,0,1), include.mean = TRUE, method= "ML")
+arma_ibov
+
+## Morettin-Valls Window para os Resíduos ARIMA(1,0,6) with non-zero mean
+par(mfrow=c(1,1))
+plot(arma_ibov$residuals)
+abline(h = mean(arma_ibov$residuals)+1.96*sd(arma_ibov$residuals), col='red', lty=2)
+abline(h = mean(arma_ibov$residuals)-1.96*sd(arma_ibov$residuals), col='red', lty=2)
+
+## FAC dos Resíduos ARIMA(1,0,6)
+Acf(arma_ibov$residuals, lag.max = 20)
+```
+
+Novamente, a análise da Morettin-Valls Window pode parcer indicar que os resíduos da estimação podem ser ruído branco, dado que a média e a variância são finitas e parecem serem constantes no tempo. No entanto a FAC dos Resíduos indica que os resídos não são ruído branco.
+
+
+```{r}
+jarque.bera.test(arma_ibov$residuals)
+```
+
+
+## Estimando Recursivamente{.tabset .tabset-fade .tabset-pills}
+
+### BBAS3
+
+O melhor modelo escolhido inicialmente não é possivel de ser estimado por OLS. Assim vamos considerar o modelo ARIMA(1,1,0) em nossas estimações por OLS. Neste modelo a estimação dos parâmetros é feita a cada período onde o conjunto informacional vai sendo atualizado com cada nova observação adcionada.
+
+```{r warning=TRUE}
+## Estimando Recursivamente
+df_recursivo <- cbind(dlbbas,Lag(dlbbas))
+colnames(df_recursivo) <- c("dlbbas", "dlbbas_lag")
+eq1r <- lapply(seq(10, length(dlbbas)), function(x) lm(dlbbas ~ dlbbas_lag, data = df_recursivo[1:x, ]))
+summary(eq1r[[1]])
+length(eq1r)
+
+# Obtendo todos os coeficients
+all_intercepts <- unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[1]))
+all_slopes<-unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[2]))
+all_slopes[1] 
+
+# sd
+sd_intercepts <- unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[3]))
+sd_slopes<-unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[4]))
+sd_slopes[1]
+
+# Plotando coeficientes
+par(mfrow = c(1,1))
+
+plot.zoo(cbind(all_intercepts, 
+               all_intercepts+ sd_intercepts*1.96, 
+               all_intercepts-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - intercept", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+
+plot.zoo(cbind(all_slopes, 
+               all_slopes+ sd_intercepts*1.96, 
+               all_slopes-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - phi", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+```
+
+A análise do gráfico do CUSUM indica que o processo é estável no tempo, dado que nenhuma tendência (positiva ou negativa) aparece ao longo do período análisado. Isso indica que a média do processo não variou ao longo do tempo.
+
+```{r}
+# CUSUM 
+cusum <- strucchange::efp(dlbbas ~ Lag(dlbbas), type = "Rec-CUSUM")
+plot(cusum, ylab = "")
+
+# CUSUMQ
+residrls2 <- arma_bbas$residuals^2 
+cusumq <- cumsum(c(0, residrls2))/sum(residrls2)
+plot(cusumq, type = "l", main = "Recursive CUSUMQ test", ylab = "")
+```
+
+
+
+### IBOV
+
+Aqui tambem vamos considerar o modelo ARIMA(1,1,0) em nossas estimações por OLS. Neste modelo a estimação dos parâmetros é feita a cada período onde o conjunto informacional vai sendo atualizado com cada nova observação adcionada.
+
+
+```{r warning=TRUE}
+## Estimando Recursivamente
+df_recursivo2 <- cbind(dlibov,Lag(dlibov))
+colnames(df_recursivo2) <- c("dlibov", "dlibov_lag")
+eq2r <- lapply(seq(10, length(dlibov)), function(x) lm(dlibov ~ dlibov_lag, data = df_recursivo2[1:x, ]))
+summary(eq2r[[1]])
+length(eq2r)
+
+# Obtendo todos os coeficientes
+all_intercepts2 <- unlist(sapply(1:length(eq2r),function(j) eq2r[[j]]$coefficients[1]))
+all_slopes2<-unlist(sapply(1:length(eq2r),function(j) eq2r[[j]]$coefficients[2]))
+all_slopes2[1]
+
+# sd
+sd_intercepts2 <- unlist(sapply(1:length(eq2r),function(j) summary(eq2r[[j]])$coefficients[3]))
+sd_slopes2<-unlist(sapply(1:length(eq2r),function(j) summary(eq2r[[j]])$coefficients[4]))
+sd_slopes2[1]
+
+# Plotando coeficientes
+par(mfrow = c(1,1))
+
+plot.zoo(cbind(all_intercepts2, 
+               all_intercepts2+ sd_intercepts2*1.96, 
+               all_intercepts2-sd_intercepts2*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - intercept", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+
+
+plot.zoo(cbind(all_slopes2, 
+               all_slopes2+ sd_intercepts2*1.96, 
+               all_slopes2-sd_intercepts2*1.96), 
+         plot.type = "single", 
+         main = "Recursive estimation - phi", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+```
+
+A análise do gráfico do CUSUM indica que o processo é estável no tempo, dado que nenhuma tendência (positiva ou negativa) aparece ao longo do período análisado. Isso indica que a média do processo não variou ao longo do tempo.
+
+```{r}
+# CUSUM 
+cusum2 <- strucchange::efp(dlibov ~ Lag(dlibov), type = "Rec-CUSUM")
+plot(cusum2, ylab = "")
+
+# CUSUMQ
+residrls2 <- arma_ibov$residuals^2 
+cusumq2 <- cumsum(c(0, residrls2))/sum(residrls2)
+plot(cusumq2, type = "l", main = "Recursive CUSUMQ test", ylab = "")
+```
