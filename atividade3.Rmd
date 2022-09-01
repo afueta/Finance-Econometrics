@@ -67,8 +67,8 @@ sd_slopes<-unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficie
 par(mfrow = c(1,1))
 
 plot.zoo(cbind(all_intercepts, 
-               all_intercepts+ sd_intercepts*1.96, 
-               all_intercepts-sd_intercepts*1.96), 
+               all_intercepts + sd_intercepts*1.96, 
+               all_intercepts - sd_intercepts*1.96), 
          plot.type = "single", 
          main = "Estimação Recursiva - Alfa", 
          ylab = "", xlab = "",
@@ -146,6 +146,7 @@ ggplot(a,aes(x=value,y=recursivo)) +
 
 exrcp_bbas_m <- apply.monthly(exrcp_bbas, mean) |> ts(start=c(2000,1),frequency=12)
 exrcp_ibov_m <- apply.monthly(exrcp_ibov, mean) |> ts(start=c(2000,1),frequency=12)
+
 ```
 
 

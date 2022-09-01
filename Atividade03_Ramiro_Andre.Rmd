@@ -1,0 +1,372 @@
+---
+title: "Atividade 3"
+author: "Ramiro Haase and André Pellizzaro"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+#setwd("C:/Users/ramir/OneDrive/Desktop/EESP/Financial Econometrics/Atividades/Atividade03")
+```
+
+```{r, include=FALSE}
+
+options(scipen=50)
+library(tidyverse)
+library(forecast)
+library(tseries)
+library(readxl)
+library(xts)
+library(tvReg)
+library(seasonal)
+library(shiny)
+library(lubridate)
+```
+
+### Carregando os dados
+```{r message=FALSE, warning=FALSE}
+df <- read_excel("DADOS_BR_SB.xlsx")
+# Banco do Brasil SA (BBAS3)
+bbas <- na.omit(xts(as.numeric(df$BBAS3_SB), order.by=as.Date(df$Date)))
+bbas <- na.omit(100*diff(log(bbas)))
+# Bovespa Index (IBOV)
+ibov <- na.omit(xts(as.numeric(df$IBOVC_SB), order.by=as.Date(df$Date)))
+ibov <- na.omit(100*diff(log(ibov)))
+# Selic 252
+selic <- na.omit(xts(as.numeric(df$Selic252_SB), order.by=as.Date(df$Date)))
+selic <- na.omit(100*diff(log(selic)))
+```
+
+# Questão 1
+
+#### 1.
+
+O modelo CAPM que o excesso de retornos do BBAS3 e do mercado (IBOV) são: Estocástico estacionário, serialmente não correlacionado e com distribuição normal.
+
+Vamos analisar essas hipóteses uma a uma. Primeiro vamos gerar a série dos nossos excessos de retornos.
+
+```{r}
+# Excesso de retorno BBAS3
+exrcp_bbas <- bbas - selic
+plot.xts(exrcp_bbas)
+# Excesso de retorno do mercado (IBOV)
+exrcp_ibov <- ibov - selic
+plot.xts(exrcp_ibov)
+```
+
+Vamos começar pelo Excesso de retorno BBAS3, analisando a estacionaridade.
+
+```{r}
+# ACF and PACF
+par(mfrow=c(1,2))
+Acf(exrcp_bbas, lag.max=45, main = "IBOV")
+Pacf(exrcp_bbas, lag.max=45, main = "IBOV")
+# Augmented Dickey-Fuller
+adf.test(exrcp_bbas)
+ndiffs(exrcp_bbas,test="adf")
+```
+
+A série do excesso de retornos do BBAS3 parece não ser estacionária dada nossa análise da FAC e FACP. O teste ADF no entanto indica que a série é estacionária e nenhuma transfomarção é precisa para induzir estácionariedade.
+
+Pela FAC também temos que nossa série apresenta correlação serial, violando a hipótese de que os excessos de retornos do BBAS3 sejam serialmente não correlacionado.
+
+Agora vamos analisar a normalidade.
+
+```{r}
+# Histograma
+m.bbas = mean(exrcp_bbas, na.rm=TRUE)
+std.bbas = sqrt(var(exrcp_bbas, na.rm=TRUE))
+par(mfrow=c(1,1))
+hist(exrcp_bbas, breaks=100, prob=T, 
+     xlab="BBAS3", ylim=c(0, .25), xlim=c(-15,15),
+     main="Excesso de retorno BBAS3")
+lines(density(exrcp_bbas), col = "red")   
+curve(dnorm(x, mean=m.bbas, sd=std.bbas), 
+      col="darkblue", lwd=2, add=TRUE, yaxt="n")
+# Jarque–Bera
+jarque.bera.test(exrcp_bbas)
+```
+
+Pelo teste de Jarque–Bera vemos que a nossa série não é normal e logo a hipótese de normalidade não é valida para o excesso de retornos do BBAS3.
+
+Agora vamos analisar o excesso de retorno do mercado (IBOV), começando pela estacionaridade.
+
+```{r}
+# ACF and PACF
+par(mfrow=c(1,2))
+Acf(exrcp_ibov, lag.max=45, main = "IBOV")
+Pacf(exrcp_ibov, lag.max=45, main = "IBOV")
+# Augmented Dickey-Fuller
+adf.test(exrcp_ibov)
+ndiffs(exrcp_ibov,test="adf")
+```
+
+Assim como no excesso de retornos do BBAS3, a série do excesso de retornos do IBOV parece não ser estacionária dada nossa análise da FAC e FACP. O teste ADF no entanto indica que a série é estacionária e nenhuma transfomarção é precisa para induzir estácionariedade.
+
+Pela FAC também temos que nossa série apresenta correlação serial, violando a hipótese de que os excessos de retornos do IBOV sejam serialmente não correlacionado.
+
+Analisando a normalidade.
+
+```{r}
+# Histograma
+m.ibov = mean(exrcp_ibov, na.rm=TRUE)
+std.ibov = sqrt(var(exrcp_ibov, na.rm=TRUE))
+par(mfrow=c(1,1))
+hist(exrcp_ibov, breaks=100, prob=T, 
+     xlab="IBOV", ylim=c(0, .35), xlim=c(-10,10),
+     main="Excesso de retorno IBOV")
+lines(density(exrcp_ibov), col = "red")   
+curve(dnorm(x, mean=m.ibov, sd=std.ibov), 
+      col="darkblue", lwd=2, add=TRUE, yaxt="n")
+# Jarque–Bera
+jarque.bera.test(exrcp_ibov)
+```
+
+Novamente pelo teste de Jarque–Bera vemos que a nossa série não é normal e logo a hipótese de normalidade não é valida para o excesso de retornos do IBOV.
+
+Com base em nossa análise temos que essas hipóteses não são adequadas pois as séries não são normais nem serialmente não correlacionado.
+
+
+#### 2. Estimação por MQO
+
+```{r}
+capm <- lm(exrcp_bbas ~ exrcp_ibov)
+summary(capm)
+```
+
+Por violar duas das hipóteses acima, os parametros estimados por MQO não são consistentes. Temos $\alpha$ é não significativo, o que implica que o retorno do BBAS3 correspondeu ao benchmark (IBOV) no período. 
+
+#### 3. Estimação por MQR
+
+```{r}
+## Estimando Recursivamente
+df_recursivo <- cbind(exrcp_bbas,exrcp_ibov)
+colnames(df_recursivo) <- c("exrcp_bbas", "exrcp_ibov")
+eq1r <- lapply(seq(10, length(exrcp_bbas)), function(x) lm(exrcp_bbas ~ exrcp_ibov, data = df_recursivo[1:x, ]))
+# Obtendo todos os coeficients
+all_intercepts <- unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[1]))
+all_slopes <- unlist(sapply(1:length(eq1r),function(j) eq1r[[j]]$coefficients[2]))
+# sd
+sd_intercepts <- unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[3]))
+sd_slopes<-unlist(sapply(1:length(eq1r),function(j) summary(eq1r[[j]])$coefficients[4]))
+# Plotando coeficientes
+par(mfrow = c(1,1))
+## Alfa
+plot.zoo(cbind(all_intercepts, 
+               all_intercepts+ sd_intercepts*1.96, 
+               all_intercepts-sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Estimação Recursiva - Alfa", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+## Beta
+plot.zoo(cbind(all_slopes, 
+               all_slopes + sd_intercepts*1.96, 
+               all_slopes - sd_intercepts*1.96), 
+         plot.type = "single", 
+         main = "Estimação Recursiva - Beta", 
+         ylab = "", xlab = "",
+         col = c(1,2,2))
+```
+
+
+O parametro $\alpha$ tem valor proximo ao estimado por MQO e a janela estimada por MQR está dentro da estimativa por MQO. O parametro $\beta$ pode estar superestimado por MQO ja que a estimativa recursiva cresce ligeralmente ao longo do tempo e é menor do que 1.0 no início da amostra.
+
+
+#### 4.
+
+Estimando por o modelo 
+
+$$ y_t = \alpha_t +\beta_t \cdot x_t $$
+$$ \beta_t = \beta_{t-1} + \eta_t  $$
+$$ \alpha_t = \bar{y_t} - \beta_t \cdot \bar{x_t}  $$
+
+
+```{r}
+model.tvLM <- tvLM(exrcp_bbas~exrcp_ibov)
+summary(model.tvLM)
+# 90% IC do Beta
+model.tvLM.90 <- confint(model.tvLM, level = 0.95, runs = 50)
+plot(model.tvLM.90)
+```
+
+
+Vermelho = MQO
+
+Preto = MQR
+
+Azul = estimação variável
+
+
+```{r}
+# Alfas
+a <- seq(1,5879) |> as_tibble()
+a$variavel <- model.tvLM$coefficients[,1]
+a$recursivo <- c(all_intercepts,rep(NA,9))
+
+ggplot(a,aes(x=value,y=recursivo)) +
+  geom_line() +
+  geom_line(aes(y=variavel), color= "blue") +
+  geom_hline(yintercept=0.03388,color = "red") +
+  labs(x="",y="",title = "Estimação do Alfa")
+```
+
+Analisando os Alfas, vemos que o Alfa estimado por MQO está subestimado no ínicio da amostra e sobre estimado no final da amostra em relação a estimação variável. O Alfa estimado por MQR apresenta a mesma trajetoria de crescimento no inicio da amostra, porem ele fica sobre estimado no meio ao final da amosta em relação a estimação variável.
+
+```{r}
+# Betas
+a <- seq(1,5879) |> as_tibble()
+a$variavel <- model.tvLM$coefficients[,2]
+a$recursivo <- c(all_slopes,rep(NA,9))
+
+ggplot(a,aes(x=value,y=recursivo)) +
+  geom_line() +
+  geom_line(aes(y=variavel), color= "blue") +
+  geom_hline(yintercept=1.05728, color = "red") +
+  labs(x="",y="",title = "Estimação do Beta")
+```
+
+Analisando os Betas vemos que a estimação por MQO sempre apresenta um resultado subótimo em relação aos outros dois métodos. O interessante é que o o MQR parece sub estimar o Beta em relação ao modelo com estimação variável na maior parte da amostra.
+
+# Questão 2
+```{r}
+# Dados Mensais
+df$Date <- as.Date(df$Date , format="%Y-%m-%d" )
+df$Ano <- format(as.Date(df$Date, format="%Y/%m/%d"),"%m")
+Date <- c(NA,NA)
+for (i in 1:(nrow(df)-1)){
+  if (df$Ano[i] != df$Ano[i+1]){
+    Date[i] <- format(as.Date(df$Date[i], format="%Y-%m-%d"),"%Y-%m-%d")
+}}
+
+Date <- Date[is.na(Date) == FALSE]
+df_m <- data.frame(Date)
+df_m$Date <-as.Date(df_m$Date , format="%Y-%m-%d" )
+
+# Preço Mensal
+df_m$bbas_m <- NA
+df_m$ibov_m <- NA
+for ( i in 1:nrow(df_m)){
+  df_m$bbas_m[i] <- df$BBAS3_SB[which(df$Date == df_m$Date[i])]
+  df_m$ibov_m[i] <- df$IBOVC_SB[which(df$Date == df_m$Date[i])]
+}
+
+# Retorno Mensal
+df_m$lbbas_m <- NA
+df_m$libov_m <- NA
+for ( i in 2:nrow(df_m)){
+  temp_bbas = na.omit(100*diff(log(df_m$bbas_m)))
+temp_libov = na.omit(100*diff(log(df_m$ibov_m)))
+  df_m$libov_m[i] <- temp_libov[i]
+  df_m$lbbas_m[i] <- temp_bbas[i]
+}
+
+# Retorno Mensal como Time Series
+libov_m = ts(df_m$libov_m[2:269],start=c(2000,1),frequency=12)
+lbbas_m = ts(df_m$lbbas_m[2:269],start=c(2000,1),frequency=12)
+# Preço Mensal como Time Series
+ibov_m = ts(df_m$ibov_m[1:270],start=c(2000,1),frequency=12)
+bbas_m = ts(df_m$bbas_m[1:270],start=c(2000,1),frequency=12)
+```
+
+
+
+#### Sazonalidade Ibov
+```{r}
+# Plotando a série do log retorno do ibov assim como os testes ACF e PACF
+plot(libov_m)
+Acf(libov_m, lag.max=60, main ='')
+Pacf(libov_m, lag.max=60, main ='')
+```
+
+A análise das FAC e FACP da primeira diferença do Log IBOV não nos dá fortes indicios de presença de sazonalidade na série. Na FAC podemos observar alguns pontos saindo da banda. Na FACP observamos apenas um ponto fora da banda, entre o lag 24 e o lag 36. No entanto, temos que lembrar que essa banda é menor do que a banda correta. Então vamos utilizar outros métodos exploratórios para avaliar uma possível sazonalidade em nossa série.
+
+Vamos utilizar a função decompose(), que através de médias móveis nos dá os componentes sazonal, trend e irregular do IBOV.
+
+```{r}
+# Decompondo a série do Ibov
+plot(decompose(libov_m,type = "additive"))
+plot(decompose(libov_m,type = "multiplicative"))
+```
+
+O modelo "additive" usado é:
+$$Y_t = T_t + S_t + e_t $$
+
+O modelo "multiplicative" usado é:
+
+$$Y_t = T_t S_t e_t $$
+
+Em ambos os tipos de decomposição, "additive" e "multiplicative", quando analisamos o gráfico do componente sazonal da série, a série do Ibov aparenta ter um comportamento sazonal determinístico.
+
+Seguimos para uma segunda análise do componente sazonal da nossa série usando a função monthplot(). Essa função extrai subséries mensais de uma série temporal e plotam com suas médias.
+
+```{r}
+# Subséries do Ibov
+monthplot(libov_m, col.base = 2, lty.base = 2)
+```
+
+A análise das subséries mensais nos indica a presença de um componente sazonal estocástico. Vemos que as médias não são muito diferentes para os meses, no entanto temos que a variância dentro dos meses não é constante.
+
+A seguir usamos a função seas() para realizar um ajuste sazonal X-13ARIMA-SEATS em nossa série.
+
+```{r}
+ajuste_ibov <- seas(libov_m)
+summary(ajuste_ibov)
+plot(ajuste_ibov)
+```
+
+A transformação automática não pode ser realizada em nossa série pois ela não é estritamente positiva (Vemos que a série ajustada pelo seas() é igual a série original).  
+
+```{r}
+# QS statistic
+qs(seas(libov_m))
+```
+
+O teste de sazonalidade da função seas() é dado pela estatística QS e a hipótese nula do teste é não-sazonalidade. Nós não rejeitamos a hipótese nula com 95% de nivél de confiânça.
+
+#### Sazonalidade BBAS3
+```{r}
+# Plotando a série do log retorno do BBAS3 assim como os testes ACF e PACF
+plot(lbbas_m)
+Acf(lbbas_m, lag.max=60, main ='')
+Pacf(lbbas_m, lag.max=60, main ='')
+```
+
+A análise das FAC e FACP da primeira diferença do Log BBAS3 não indica presença de sazonalidade na série. Na FAC temos poucos pontos saindo da banda (novamente, a banda correta é maior) e na FACP não temos nenhum ponto saindo da banda depois do 12th lag. Assim como anteriormente, isso indica que a série provavelmente não tem um comportamento média-móvel sazonal. Vamos seguir com outros métodos de análise.
+
+```{r}
+# Decompondo a série do BBAS3
+plot(decompose(lbbas_m,type = "additive"))
+plot(decompose(lbbas_m,type = "multiplicative"))
+```
+
+Analisando os gráficos do componente sazonal da função decompose() temos que aparentemente nossa série possuí um comportamento sazonal determinístico. Podemos observar que a variância do componente sazonal é constante em todo o período análizado.
+
+```{r}
+# Subséries do BBAS3
+monthplot(lbbas_m, col.base = 2, lty.base = 2)
+```
+
+A análise do gráfico da função monthplot() nos sugere a presença de um componente sazonal estocástico. Temos choques de volatilidade em alguns meses como Janeiro, Março, Junho e Julho. Ou seja, nosso componente sazonal não parece ter variância constante. Mas, as médias são muito parecidas em todos os meses.
+
+
+A seguir usamos a função seas() para realizar um ajuste sazonal X-13ARIMA-SEATS em nossa série.
+
+```{r}
+ajuste_bbas <- seas(lbbas_m)
+summary(ajuste_bbas)
+plot(ajuste_bbas)
+```
+
+Assim como na série da diferença do log IBOV, a transformação automática não pode ser realizada na série da diferença do log BBAS3 pois ela não é estritamente positiva (Novamente, a série ajustada pelo seas() é igual a série original).  
+
+```{r}
+# QS statistic
+qs(seas(lbbas_m))
+```
+
+O teste de sazonalidade da função seas() é dado pela estatística QS e a hipótese nula do teste é não-sazonalidade. Nós não rejeitamos a hipótese nula com 95% de nivél de confiânça.
+
